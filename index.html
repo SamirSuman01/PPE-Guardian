@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PPE Compliance Dashboard</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root{
+      --bg1: #0f1724;
+      --bg2: #07132a;
+      --card: #07132a;
+      --glass: #0f1724;
+      --accent: #16a085;
+      --accent-2: #1abc9c;
+      --muted: rgba(255,255,255,0.7);
+      --danger: #ff5b5b;
+      --ok: #2ecc71;
+      --warning: #f39c12;
+    }
+
+    *{box-sizing:border-box;font-family:Inter,Segoe UI,system-ui,Arial;}
+    body{margin:0;min-height:100vh;background:linear-gradient(135deg,#07112a 0%, #0f1724 100%);color:white;}
+    header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid rgba(255,255,255,0.03);background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.00));position:sticky;top:0;z-index:20;}
+    .title{font-size:18px;font-weight:600;letter-spacing:0.6px;}
+    .header-right{margin-left:auto;display:flex;gap:12px;align-items:center;}
+    main{padding:20px;max-width:1200px;margin:20px auto;}
+    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:start;}
+    .col-4{grid-column:span 4;}
+    .col-6{grid-column:span 6;}
+    .col-8{grid-column:span 8;}
+    .col-12{grid-column:span 12;}
+    .card{background:var(--card);border-radius:12px;padding:14px;box-shadow:0 10px 30px rgba(2,6,23,0.5);border:1px solid rgba(255,255,255,0.03);min-height:80px;}
+    .metrics{display:flex;gap:12px;}
+    .metric{flex:1;padding:12px;border-radius:10px;background:var(--glass);}
+    .metric h4{margin:0 0 6px 0;font-size:12px;color:var(--muted);}
+    .metric .val{font-size:22px;font-weight:700;}
+    .controls{display:flex;gap:8px;align-items:center;}
+    .btn{background:var(--accent);border:none;padding:10px 12px;color:white;border-radius:8px;cursor:pointer;font-weight:600;min-width:80px;}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);}
+    .select,.input{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);background:var(--bg2);color:white;}
+    select option{background-color:var(--bg1);color:white;}
+    .worker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
+    .worker-card{background:var(--glass);padding:10px;border-radius:10px;display:flex;gap:10px;align-items:center;cursor:pointer;transition:transform .15s;}
+    .worker-card:hover{transform:translateY(-6px);}
+    .avatar{width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,#2c3e50,#4ca1af);display:flex;align-items:center;justify-content:center;font-weight:700;}
+    .worker-info{font-size:13px;}
+    .badge{padding:6px 8px;border-radius:8px;font-weight:700;font-size:12px;}
+    .badge.ok{background:rgba(46,204,113,0.15);color:var(--ok);border:1px solid rgba(46,204,113,0.12);}
+    .badge.fail{background:rgba(255,91,91,0.12);color:var(--danger);border:1px solid rgba(255,91,91,0.12);}
+    .badge.warn{background:rgba(243,156,18,0.15);color:var(--warning);border:1px solid rgba(243,156,18,0.12);}
+    .alerts-list{max-height:320px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+    .alert-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;background:linear-gradient(90deg,rgba(255,91,91,0.12),rgba(255,91,91,0.06));border:1px solid rgba(255,91,91,0.08);}
+    .alert-item .time{font-size:12px;color:var(--muted);}
+    .resolve{cursor:pointer;background:transparent;border:none;color:var(--muted);}
+    .modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#0f1724;padding:18px;border-radius:12px;box-shadow:0 30px 60px rgba(0,0,0,0.6);display:none;z-index:999;width:520px;color:white;}
+    .modal.show{display:block;}
+    .close-x{position:absolute;top:10px;right:10px;cursor:pointer;font-size:20px;color:var(--muted);}
+    .muted{color:var(--muted);}
+    @media (max-width:900px){
+      .row{grid-template-columns:repeat(6,1fr);}
+      .col-4{grid-column:span 6;}
+      .col-6{grid-column:span 6;}
+      .col-8{grid-column:span 6;}
+      .worker-grid{grid-template-columns:repeat(2,1fr);}
+      .metrics{flex-direction:column;}
+    }
+    @media (max-width:600px){
+      header{flex-direction:column;gap:10px;}
+      .header-right{margin-left:0;flex-wrap:wrap;justify-content:center;}
+      .title{text-align:center;}
+      .btn{padding:8px 10px;font-size:14px;}
+      .worker-grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">PPE Compliance Dashboard — Real-Time Monitoring</div>
+    <div class="header-right">
+      <div class="muted" id="clock">--:--</div>
+      <select id="siteSelect" class="select" aria-label="Select site">
+        <option value="site-a">Site A — Plant 1</option>
+        <option value="site-b">Site B — Warehouse</option>
+        <option value="site-c">Site C — Steel Plant (Tata Steel)</option>
+        <option value="site-d">Site D — Power Plant (Tata Power)</option>
+        <option value="site-e">Site E — Chemical Processing</option>
+      </select>
+      <button class="btn" id="exportPdf" title="Export as PDF">Export Report</button>
+      <button class="btn" id="exportCsv" title="Export data as CSV">Export CSV</button>
+    </div>
+  </header>
+  <main>
+    <div class="row">
+      <div class="col-8">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <h3 style="margin:0">Live Camera or Upload Image</h3>
+              <div class="muted">Camera: Gate 1 or upload your pic</div>
+            </div>
+            <div class="controls">
+              <button class="btn" onclick="startCamera()" title="Start live camera feed">Start Camera</button>
+              <button class="btn ghost" onclick="captureSnapshot()" title="Capture a snapshot from camera">Snapshot</button>
+              <input type="file" id="imageUpload" accept="image/*" style="display:none;" onchange="detectPPEFromImage()">
+              <button class="btn ghost" onclick="document.getElementById('imageUpload').click()" title="Upload an image for detection">Upload Image</button>
+              <button class="btn ghost" onclick="simulateDetection()" title="Run a simulation">Simulate</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:12px;align-items:flex-start;">
+            <div style="flex:1;">
+              <video id="video" width="100%" height="320" autoplay playsinline style="border-radius:10px;background:#000"></video>
+              <img id="uploadedImage" width="100%" height="320" style="border-radius:10px;background:#000;display:none;"></img>
+              <canvas id="canvas" width="800" height="320" style="display:none"></canvas>
+            </div>
+            <div style="width:260px;">
+              <div class="metrics">
+                <div class="metric" title="Percentage of compliant workers">
+                  <h4>Compliance</h4>
+                  <div class="val"><span id="compVal">--%</span></div>
+                  <div class="muted" style="font-size:12px">Last check</div>
+                </div>
+                <div class="metric" title="Number of violations today">
+                  <h4>Violations</h4>
+                  <div class="val" id="violationsCount">0</div>
+                  <div class="muted" style="font-size:12px">Today</div>
+                </div>
+              </div>
+              <div style="margin-top:12px">
+                <canvas id="gaugeChart" width="260" height="150"></canvas>
+              </div>
+              <div id="safetyScore" class="badge ok" style="margin-top:10px;text-align:center;">Safety Score: Good</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h4 style="margin:0">PPE Trend & Filters</h4>
+            <div>
+              <label class="muted">Confidence</label>
+              <input id="confSlider" type="range" min="0" max="1" step="0.01" value="0.5" class="input" style="width:120px" title="Detection confidence threshold">
+            </div>
+          </div>
+          <div style="display:flex;gap:18px;margin-top:10px;align-items:center">
+            <div style="flex:1;">
+              <canvas id="trendChart" height="120" onclick="alert('Clicked trend - filter by day (coming soon)');" title="Compliance trend over days - click to drill down"></canvas>
+            </div>
+            <div style="width:260px">
+              <h5 class="muted">Filters & PPE Checklist</h5>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <select id="deptFilter" class="select" aria-label="Filter by department">
+                  <option value="all">All Departments</option>
+                  <option value="prod">Production</option>
+                  <option value="maint">Maintenance</option>
+                  <option value="log">Logistics</option>
+                  <option value="mining">Mining</option>
+                  <option value="energy">Energy</option>
+                  <option value="chemicals">Chemicals</option>
+                </select>
+                <input type="date" id="dateFilter" class="input" title="Filter by date">
+                <select id="ppeFilter" class="select" aria-label="Filter by PPE type">
+                  <option value="all">All PPE</option>
+                  <option value="helmet">Helmet</option>
+                  <option value="vest">Vest</option>
+                  <option value="gloves">Gloves</option>
+                  <option value="boots">Boots</option>
+                  <option value="goggles">Goggles</option>
+                  <option value="respirator">Respirator</option>
+                  <option value="harness">Harness</option>
+                </select>
+                <button class="btn" onclick="applyFilters()" title="Apply selected filters">Apply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card">
+          <h4 style="margin-top:0">Active Alerts</h4>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input id="newAlert" class="input" placeholder="Enter alert (e.g., Worker 5 missing boots)" title="Add a manual alert">
+            <button id="newAlertBtn" class="btn" title="Submit new alert">Add Alert</button>
+          </div>
+          <div class="alerts-list" id="alertsList"></div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="btn" onclick="triggerEmergency()" title="Trigger emergency alert">Trigger Emergency</button>
+            <button class="btn ghost" onclick="resolveAll()" title="Resolve all active alerts">Resolve All</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0">Logs (All Alerts)</h4>
+          <div class="alerts-list" id="logsList"></div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0">Worker Compliance</h4>
+          <input type="text" id="workerSearch" class="input" placeholder="Search workers..." oninput="filterWorkers()" title="Search by worker name" style="margin-bottom:10px;width:100%;">
+          <div class="worker-grid" id="workerGrid"></div>
+        </div>
+      </div>
+      <div class="col-12" style="margin-top:12px">
+        <div class="card">
+          <h4 style="margin:0">Site Heatmap</h4>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <label class="muted">Focus Zone</label>
+            <select id="zoneSelect" class="select" onchange="updateHeatmap()" aria-label="Select zone to focus">
+              <option value="all">All Zones</option>
+              <option value="a">Zone A — Gate (Good)</option>
+              <option value="b">Zone B — Warehouse (Watch)</option>
+              <option value="c">Zone C — Furnace (High Violations)</option>
+              <option value="d">Zone D — Mining Area</option>
+              <option value="e">Zone E — Turbine Room</option>
+              <option value="f">Zone F — Chemical Lab</option>
+            </select>
+          </div>
+          <div id="heatmap" style="height:220px;margin-top:12px;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Hover to zoom">
+            <svg width="100%" height="200" viewBox="0 0 800 200" preserveAspectRatio="xMidYMid meet">
+              <rect x="0" y="0" width="800" height="200" fill="rgba(255,255,255,0.02)"></rect>
+              <rect id="zoneA" x="20" y="20" width="120" height="140" rx="8" fill="#2ecc71" opacity="0.18"></rect>
+              <rect id="zoneB" x="150" y="20" width="120" height="140" rx="8" fill="#f39c12" opacity="0.18"></rect>
+              <rect id="zoneC" x="280" y="20" width="120" height="140" rx="8" fill="#e74c3c" opacity="0.18"></rect>
+              <rect id="zoneD" x="410" y="20" width="120" height="140" rx="8" fill="#2ecc71" opacity="0.18"></rect>
+              <rect id="zoneE" x="540" y="20" width="120" height="140" rx="8" fill="#f39c12" opacity="0.18"></rect>
+              <rect id="zoneF" x="670" y="20" width="120" height="140" rx="8" fill="#e74c3c" opacity="0.18"></rect>
+              <text x="40" y="40" fill="white" font-size="12">Zone A — Gate</text>
+              <text x="170" y="40" fill="white" font-size="12">Zone B — Warehouse</text>
+              <text x="300" y="40" fill="white" font-size="12">Zone C — Furnace</text>
+              <text x="430" y="40" fill="white" font-size="12">Zone D — Mining Area</text>
+              <text x="560" y="40" fill="white" font-size="12">Zone E — Turbine Room</text>
+              <text x="690" y="40" fill="white" font-size="12">Zone F — Chemical Lab</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div class="modal" id="workerModal">
+    <span class="close-x" onclick="closeModal()">X</span>
+    <h3 id="modalName">Worker #</h3>
+    <div id="modalBody" class="muted">Loading...</div>
+    <div style="text-align:right;margin-top:12px;">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+<script>
+const CONFIG = {
+  mockMode: false,
+  emergencySirenUrl: 'https://www.soundjay.com/misc/sounds/siren-02.mp3',
+  maxWorkers: 9,
+  requiredPPE: ['helmet', 'vest', 'gloves', 'boots', 'goggles'],
+  complianceThreshold: 80,
+  roboFlowApiKey: '', // your key
+  modelId: 'ppe-detection-exbpw/3'
+};
+
+let state = {
+  workers: [],
+  alerts: [],
+  compliance: 100,
+};
+
+function nowStr(){ return new Date().toLocaleTimeString(); }
+
+const clock = document.getElementById('clock');
+setInterval(()=> clock.innerText = new Date().toLocaleString(), 1000);
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+async function startCamera(){
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({video:{width:1280}});
+    video.srcObject = stream;
+  } catch (e){ 
+    console.error('Camera error:', e);
+    alert('Please allow camera access in your browser. This works best on a secure site (HTTPS).');
+  }
+}
+function captureSnapshot(){
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video,0,0,canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL('image/jpeg');
+  console.log('snapshot taken');
+  return dataUrl;
+}
+
+async function detectPPEFromImage() {
+  const file = document.getElementById('imageUpload').files[0];
+  if (!file) return;
+  const img = document.getElementById('uploadedImage');
+  img.src = URL.createObjectURL(file);
+  img.style.display = 'block';
+  video.style.display = 'none';
+  img.onload = async () => {
+    if (!CONFIG.roboFlowApiKey || CONFIG.mockMode) {
+      simulateDetection();
+      return;
+    }
+    const canvasTemp = document.createElement('canvas');
+    canvasTemp.width = img.width;
+    canvasTemp.height = img.height;
+    const ctxTemp = canvasTemp.getContext('2d');
+    ctxTemp.drawImage(img, 0, 0);
+    const base64 = canvasTemp.toDataURL('image/jpeg').split(',')[1];
+    try {
+      const response = await fetch(`https://detect.roboflow.com/${CONFIG.modelId}?api_key=${CONFIG.roboFlowApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: base64
+      });
+      const result = await response.json();
+      let detectedPPE = new Set();
+      result.predictions.forEach(p => {
+        detectedPPE.add(p.class);
+        ctxTemp.strokeStyle = '#00ff00';
+        ctxTemp.lineWidth = 2;
+        ctxTemp.strokeRect(p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
+        ctxTemp.fillStyle = '#00ff00';
+        ctxTemp.fillText(p.class + ' ' + Math.round(p.confidence * 100) + '%', p.x - p.width / 2 + 5, p.y - p.height / 2 - 5);
+      });
+      img.src = canvasTemp.toDataURL();
+      const missing = CONFIG.requiredPPE.filter(p => !detectedPPE.has(p));
+      if (missing.length > 0) {
+        state.alerts.push({id: Date.now(), msg: `Detected worker missing ${missing.join(', ')}`, ts: nowStr(), resolved: false});
+        state.compliance = Math.max(0, state.compliance - 20);
+      } else {
+        state.compliance = Math.min(100, state.compliance + 10);
+      }
+      if (state.compliance < CONFIG.complianceThreshold) {
+        alert(`Low compliance! Below ${CONFIG.complianceThreshold}% - check PPE.`);
+      }
+      renderAlerts();
+      renderLogs();
+      updateHeatmap();
+    } catch (e) {
+      alert('Detection error: ' + e.message + ' - Check API key or use simulation.');
+      simulateDetection();
+    }
+  };
+}
+
+let gaugeChart, trendChart;
+function initCharts(){
+  const gctx = document.getElementById('gaugeChart').getContext('2d');
+  gaugeChart = new Chart(gctx, {
+    type:'doughnut',
+    data: { labels:['Compliant','Non-compliant'], datasets:[{data:[80,20], backgroundColor:['#2ecc71', '#ff5b5b'], hoverOffset:4}] },
+    options: { cutout:'80%', plugins:{legend:{display:false}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  const tctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(tctx, {
+    type:'line',
+    data: { labels:[], datasets:[{label:'Compliance %', data:[], fill:true, tension:0.4, backgroundColor:'rgba(26,188,156,0.12)', borderColor:'#16a085', pointRadius:0}] },
+    options: { plugins:{legend:{display:false}}, scales:{y:{min:0,max:100}}, responsive:true, maintainAspectRatio:false }
+  });
+}
+
+function renderWorkers(){
+  const grid = document.getElementById('workerGrid');
+  grid.innerHTML = '';
+  state.workers.sort((a,b) => b.ppeHistory.filter(ok => ok).length - a.ppeHistory.filter(ok => ok).length);
+  state.workers.forEach((w) => {
+    const div = document.createElement('div');
+    div.className = 'worker-card';
+    div.innerHTML = `<div class="avatar">${w.name.split(' ')[0].slice(0,1)}</div>
+                     <div class="worker-info"><div><b>${w.name}</b></div><div class="${w.ok?'badge ok':'badge fail'}">${w.ok?'✅ OK':'❌ Missing PPE'}</div></div>`;
+    div.onclick = () => openModal(w);
+    grid.appendChild(div);
+  });
+}
+
+function filterWorkers(){
+  const search = document.getElementById('workerSearch').value.toLowerCase();
+  const cards = document.querySelectorAll('.worker-card');
+  cards.forEach(c => {
+    const name = c.querySelector('b').innerText.toLowerCase();
+    c.style.display = name.includes(search) ? 'flex' : 'none';
+  });
+}
+
+function renderAlerts(){
+  const list = document.getElementById('alertsList');
+  list.innerHTML = '';
+  state.alerts.filter(x=>!x.resolved).forEach(a => {
+    const item = document.createElement('div');
+    item.className = 'alert-item';
+    item.innerHTML = `<div><b>${a.msg}</b><div class="time">${a.ts}</div></div>
+                      <div><button class="resolve" onclick="resolveAlert('${a.id}')">Resolve</button></div>`;
+    list.appendChild(item);
+  });
+  document.getElementById('violationsCount').innerText = state.alerts.filter(x=>!x.resolved).length;
+  document.getElementById('compVal').innerText = Math.round(state.compliance) + '%';
+  gaugeChart.data.datasets[0].data = [state.compliance, 100-state.compliance];
+  gaugeChart.update();
+  const scoreBadge = document.getElementById('safetyScore');
+  if (state.compliance > 90) {
+    scoreBadge.className = 'badge ok';
+    scoreBadge.innerText = 'Safety Score: Great!';
+  } else if (state.compliance > 70) {
+    scoreBadge.className = 'badge warn';
+    scoreBadge.innerText = 'Safety Score: Okay';
+  } else {
+    scoreBadge.className = 'badge fail';
+    scoreBadge.innerText = 'Safety Score: Fix It!';
+  }
+  renderLogs();
+}
+
+function renderLogs(){
+  const list = document.getElementById('logsList');
+  list.innerHTML = '';
+  state.alerts.forEach(a => {
+    const item = document.createElement('div');
+    item.className = 'alert-item';
+    item.innerHTML = `<div><b>${a.msg}</b><div class="time">${a.ts}</div><div>${a.resolved ? 'Resolved' : 'Active'}</div></div>`;
+    list.appendChild(item);
+  });
+}
+
+function openModal(worker){
+  document.getElementById('workerModal').classList.add('show');
+  document.getElementById('modalName').innerText = worker.name;
+  const historyList = worker.ppeHistory.map(h => `<li>${h ? 'OK' : 'Missing'}</li>`).join('');
+  document.getElementById('modalBody').innerHTML = `<p>Last seen: ${worker.lastSeen}</p><p>Status: ${worker.ok?'Compliant':'Violation'}</p>
+    <p class="muted">Recent checks:</p><ul>${historyList}</ul>`;
+  document.addEventListener('keydown', closeOnEscape);
+}
+function closeModal(){
+  document.getElementById('workerModal').classList.remove('show');
+  document.removeEventListener('keydown', closeOnEscape);
+}
+function closeOnEscape(e){ if (e.key === 'Escape') closeModal(); }
+
+function resolveAlert(id){
+  const a = state.alerts.find(x=>x.id===id);
+  if(a) a.resolved = true;
+  renderAlerts();
+}
+function resolveAll(){ state.alerts.forEach(a=>a.resolved=true); renderAlerts(); }
+
+function triggerEmergency(){
+  const active = state.alerts.filter(a=>!a.resolved);
+  if(active.length===0){ alert('No active alerts'); return; }
+  const text = active.map(a=>a.msg).join('. ');
+  const siren = new Audio(CONFIG.emergencySirenUrl);
+  siren.loop = true;
+  siren.play();
+  const ut = new SpeechSynthesisUtterance(text);
+  window.speechSynthesis.speak(ut);
+  alert('EMERGENCY: ' + text);
+  siren.pause();
+}
+
+function simulateDetection(){
+  const ids = Array.from({length: CONFIG.maxWorkers}, (_,i)=>i+1);
+  state.workers = ids.map(i=>({
+    id: i,
+    name: `Worker ${i}`,
+    ok: Math.random()>0.25,
+    lastSeen: nowStr(),
+    ppeHistory: Array(5).fill(0).map(() => Math.random()>0.2)
+  }));
+  state.alerts = [];
+  state.workers.forEach(w=>{
+    if(!w.ok) {
+      const missingCount = Math.floor(Math.random() * 2) + 1;
+      const missing = CONFIG.requiredPPE.sort(() => 0.5 - Math.random()).slice(0, missingCount);
+      state.alerts.push({id:'a'+w.id, msg: `${w.name} missing ${missing.join(', ')}`, ts: nowStr(), resolved:false});
+    }
+  });
+  const okCount = state.workers.filter(w=>w.ok).length;
+  state.compliance = (okCount/state.workers.length)*100;
+  renderWorkers(); renderAlerts();
+  const tdata = Array.from({length:7}, ()=> Math.round(60 + Math.random()*40));
+  trendChart.data.labels = ['-6d','-5d','-4d','-3d','-2d','-1d','Today'];
+  trendChart.data.datasets[0].data = tdata;
+  trendChart.update();
+  updateHeatmap();
+}
+
+function applyFilters(){
+  localStorage.setItem('lastSite', document.getElementById('siteSelect').value);
+  alert('Filters applied - showing ' + document.getElementById('ppeFilter').value);
+}
+
+function updateHeatmap(){
+  const compliance = state.compliance;
+  const fillColor = compliance > 90 ? '#2ecc71' : compliance > 70 ? '#f39c12' : '#e74c3c';
+  document.querySelectorAll('#heatmap rect[id^="zone"]').forEach(r => r.setAttribute('fill', fillColor));
+  const zone = document.getElementById('zoneSelect').value;
+  if (zone !== 'all') {
+    document.querySelectorAll('#heatmap rect[id^="zone"]').forEach(r => r.style.opacity = r.id === 'zone' + zone.toUpperCase() ? '0.18' : '0.05');
+  } else {
+    document.querySelectorAll('#heatmap rect[id^="zone"]').forEach(r => r.style.opacity = '0.18');
+  }
+}
+
+function exportCsv(){
+  let csv = 'ID,Name,Status,LastSeen\n';
+  state.workers.forEach(w => csv += `${w.id},${w.name},${w.ok ? 'OK' : 'Missing'},${w.lastSeen}\n`);
+  csv += '\nAlerts:\nID,Msg,Time,Resolved\n';
+  state.alerts.forEach(a => csv += `${a.id},${a.msg},${a.ts},${a.resolved ? 'Yes' : 'No'}\n`);
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ppe_report.csv';
+  a.click();
+}
+
+initCharts();
+simulateDetection();
+setInterval(simulateDetection, 10000);
+document.getElementById('exportPdf').addEventListener('click', () => { alert('Exporting PDF (hook a lib like jsPDF)'); });
+document.getElementById('exportCsv').addEventListener('click', exportCsv);
+document.getElementById('siteSelect').value = localStorage.getItem('lastSite') || 'site-a';
+document.getElementById('newAlertBtn').addEventListener('click', () => {
+  const msg = document.getElementById('newAlert').value;
+  if (msg) {
+    state.alerts.push({ id: Date.now(), msg, ts: nowStr(), resolved: false });
+    renderAlerts();
+    document.getElementById('newAlert').value = '';
+  }
+});
+
+function pushDetectionResult(r){
+  let w = state.workers.find(x=>x.id===r.workerId);
+  if(!w){
+    w = { id:r.workerId, name:r.name, ok:true, lastSeen: nowStr(), ppeHistory: [] };
+    state.workers.push(w);
+  }
+  const requiredOk = CONFIG.requiredPPE.every(p => r[p]);
+  w.ok = requiredOk;
+  w.lastSeen = nowStr();
+  w.ppeHistory.push(requiredOk);
+  if (w.ppeHistory.length > 10) w.ppeHistory.shift();
+  if(!requiredOk){
+    const missing = CONFIG.requiredPPE.filter(p => !r[p]);
+    const id = 'a'+r.workerId+'-'+Date.now();
+    state.alerts.unshift({id, msg:`${r.name} missing ${missing.join(', ')}`, ts: nowStr(), resolved:false});
+  }
+  const okCount = state.workers.filter(w=>w.ok).length;
+  state.compliance = (okCount/state.workers.length)*100;
+  renderWorkers(); renderAlerts();
+}
+</script>
+</body>
+</html>
